@@ -1,34 +1,44 @@
-# Ministry of Education Portal
+# Ministry of Education Portal — Distributed System (full stack)
 
-### 1.  Problem Statement (Motivation)
-In Ethiopia, accessing the Grade 12 University Entrance Exam Result on the Ministry of Education's website becomes highly challenging due to overwhelming traffic. With more than 500,000 students taking the University Entrance Exam each year, the Ministry of Education's website struggles to handle the massive load during the result publication period. This overload causes frustration and inconvenience for students who need to repeatedly attempt result retrieval. To address this issue, our project aims to provide a scalable and reliable solution.
+A fault-tolerant **distributed system in Go** that serves Ethiopia's Grade-12 University Entrance Exam results at national scale. This is the complete monorepo: a geo-aware load balancer, **replicated** auth and backend services, a petition service, MySQL, and a ReactJS frontend.
 
-### 2. Solution Overview
-    
-Our project includes a thoughtfully designed distributed system, where server components are positioned for optimal performance and the ability to withstand faults. These components comprise:
-- **Load Balancer:** Responsible for distributing incoming requests evenly across replicated servers, preventing the overloading of any single server and ensuring optimal performance. Utilizing a combination of a Geo-based Load Balancing algorithms for request distribution and distance calculation to optimize server selection based on the user's location, this server ensures efficiency and responsiveness.
-- **Authentication Servers**: Responsible for user authentication and authorization, these servers guarantee that only authorized Ministry of Education administrators can securely upload exam results.
-- **Backend Server:** This manages incoming requests. Importantly, it doesn't mandate students to be authenticated to view their results; rather, it prioritizes authentication and authorization for result uploads. To achieve this, it communicates with the Authentication Server using RPC API, ensuring that only authenticated and authorized administrators can upload results securely.
-- **MySQL Server :** The integration of MySQL server enhances our data management capabilities, providing a robust foundation for storing and retrieving crucial data such as exam results in an organized and scalable manner.
-- **Frontend :** The user interface, built with ReactJS, offers a user-friendly experience for students to effortlessly retrieve their exam results and submit any necessary complaints.
-- **Real-time Petition Handling:** This feature, allows students to submit complaints directly to the Ministry of Education. It facilitates the concurrent file edition between students.
-### 3. **Technologies Used**
-- **Golang**: used for developing all servers except the frontend.
-- **ReactJS**: utilized for building the frontend, providing an interactive user interface.
-- **MySQLDB**: Database technology for storing and managing exam results and other relevant data.
-- **RPC API**: Facilitates communication between different components of the distributed system.
-- **Token-based Authentication and Authorization**: Ensures secure access to the system, allowing only authenticated and authorized users.
-- --
-## Installation Guide
-1. clone this repository
-2. for each server configure the mysql server according to your local mysql configuration
-3. run your etcd donwloaded locally for continuous sync between the servers
-4. run each server
-5. access the project through the forntend UI on the browser through `localhost:3000`
+![MoE portal](docs/screenshots/home.png)
 
-### Contributors
-1. Tofik Abdu ........... UGR/1721/13
-2. Nahom Amare ...........UGR/7099/13
-3. Tadael Shewarega ......UGR/1044/13
-4. Thomas Wondwosen ..... UGR/1972/13
-5. Habiba Nesro ..........UGR/0088/13  
+## The problem
+
+Each year 500,000+ students check their University Entrance Exam results in a short window. A single server buckles under that spike. This system distributes the load across replicated, coordinated services so results stay available under heavy traffic.
+
+## Architecture
+
+```
+                  ┌─────────────────┐
+   clients  ────▶ │  Load Balancer  │  geo-aware selection + etcd coordination
+                  └────────┬────────┘
+        ┌──────────────────┼──────────────────┐
+   ┌────▼─────┐       ┌─────▼─────┐       ┌────▼─────┐
+   │ backend  │       │   auth    │       │ petition │
+   │ server_1 │       │ server_1  │       │   1 / 2  │
+   │ server_2 │       │ server_2  │       └──────────┘
+   └────┬─────┘       └───────────┘
+        ▼                                   ┌──────────┐
+     ┌───────┐                              │ frontend │  ReactJS
+     │ MySQL │                              └──────────┘
+     └───────┘
+```
+
+- **Load balancer** (`load_balancer/LoadBalancer.go`) — distributes requests across replicas with **geo-aware server selection** and **etcd**-based distributed locking/coordination (lease grants + compare-and-swap).
+- **Auth servers** (`auth/server_1`, `auth/server_2`) — replicated; authenticate and authorize admins. Only authorized MoE staff can upload results. The backend calls auth over **RPC**.
+- **Backend servers** (`backend/server_1`, `backend/server_2`) — replicated; serve student result lookups (open) and accept authorized uploads.
+- **Petition service** (`backend/petition1`, `backend/petition2`) — handles student result petitions.
+- **MySQL** — durable storage for results.
+- **Frontend** (`frontend/`) — ReactJS UI for students.
+
+## Tech stack
+
+**Go** · **etcd** · **MySQL** · RPC · ReactJS · Docker
+
+## Running locally
+
+Each Go service is its own module (see `go.work`). Start etcd and MySQL, then bring up the load balancer, auth servers, and backend servers (see `start.sh`). Run the frontend with `cd frontend && npm install && npm run dev`.
+
+> Team project (forked from the shared team repo). My work focused on the load balancer, etcd-based coordination, and the backend/auth RPC path.
